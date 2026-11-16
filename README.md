@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # BkSys - BkiTevSim Simulation Framework
 
 **BkiTevSim - System Performance Evaluation Simulation for Course CO3007**
@@ -77,3 +78,6 @@ This project is licensed under the terms specified in [LICENSE](LICENSE) - educa
 **Copyright (C) 2026 pdnguyen of HCMC University of Technology VNU-HCM**
 
 *BkitEvsim - System Performance Evaluation Simulation for Course CO3007*
+=======
+# Syst_Perf_eval
+>>>>>>> 14ec5c8174bbd4135dab87ab74a587815ecd4c5f
