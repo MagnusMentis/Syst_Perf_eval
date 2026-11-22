@@ -18,21 +18,21 @@ class QueueSystemLP(BkSysLogicalProcess): #our own model
         self.busy = 0 #busy workers (0 at first too)
         self.last_t = 0.0 #last time update (0 at first too)
         
-        self.area_n = self.area_q = self.area_busy = 0.0 #sums of persons in the area,sum of persons in the queue and sum of busy workers
+        self.area_t = self.queue_t = self.busy_t = 0.0 #sums of persons in the area,sum of persons in the queue and sum of busy workers
         self.arrived = self.rejected = self.completed = self.started = 0 #number of arrived clients,number of rejected clients, number request completed and number of client getting served 
         self.wait_q = self.wait_tot = 0.0 #sum of waiting time in the queue, and total waiting time queue+service
 
-    def send(self, time, kind, payload=None): #function to add an event to the simulator's list of events
-        self.send_event(Event(time, self.lp_id, self.lp_id, kind, payload)) #sender and receiver are the same in our model
+    def send(self, time, event_type, arrival_time=None): #function to add an event to the simulator's list of events
+        self.send_event(Event(time, self.lp_id, self.lp_id, event_type, arrival_time)) #sender and receiver are the same in our model
 
     def update_areas(self, now):
         dt = now - self.last_t #calculate time since previous event
-        self.area_n += (len(self.waiting) + self.busy) * dt
-        self.area_q += len(self.waiting) * dt
-        self.area_busy += self.busy * dt
+        self.area_t += (len(self.waiting) + self.busy) * dt
+        self.queue_t += len(self.waiting) * dt
+        self.busy_t += self.busy * dt
         self.last_t = now
 
-    def start_service(self, now, arrival_time): #one more worker is busy, one more client is start service
+    def start_service(self, now, arrival_time): #one more worker is busy, one more client start service
         self.busy += 1
         self.started += 1
         self.wait_q += now - arrival_time
@@ -52,7 +52,7 @@ class QueueSystemLP(BkSysLogicalProcess): #our own model
             self.send(now + random.expovariate(self.lam), "ARRIVAL") #program next arrival
             if len(self.waiting) + self.busy >= self.K: # system is full
                 self.rejected += 1  #client get rejected
-            elif self.busy < self.c:     # a worker is free
+            elif self.busy < self.c: # a worker is free
                 self.start_service(now, now) #service start
             else:                                            
                 self.waiting.append(now) #client stays in the waiting list
@@ -75,9 +75,9 @@ def run(lam, mu, c, K, T, seed=42):
     lp = sim.create_lp(0, "QueueSystemLP", lam=lam, mu=mu, c=c, K=K, T=T)
     sim.run()
 
-    L = lp.area_n / T
-    Lq = lp.area_q / T
-    U = lp.area_busy / T / c
+    L = lp.area_t / T
+    Lq = lp.queue_t / T
+    U = lp.busy_t / T / c
     X = lp.completed / T
     P_block = lp.rejected / lp.arrived
     Wq = lp.wait_q / lp.started
