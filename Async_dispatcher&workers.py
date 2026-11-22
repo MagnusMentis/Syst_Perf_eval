@@ -30,7 +30,7 @@ class Task:
     start_time: Optional[float] = None
     end_time: Optional[float] = None
     worker_id: Optional[int] = None
-    future: Optional[BkSysFuture] = None
+    future: Optional[BkSysFuture] = None # completion or cancell
 
 
 @dataclass
@@ -56,6 +56,7 @@ class AsyncWorkerLP(BkSysCoLogicalProcess):
         while True:
             try:
                 ev = await self.wait_for_multiple([EventType.ASSIGN_TASK.value])
+                #remove comsumed event, prevent duplicate processing
                 self._pending_events = [e for e in self._pending_events if e is not ev]
             except (TIMEOUT_ERROR, CANCELLED_ERROR):
                 break
@@ -65,7 +66,7 @@ class AsyncWorkerLP(BkSysCoLogicalProcess):
             self.state.is_busy = True
             task.worker_id = self.lp_id
             task.start_time = start
-
+            #non blocking delay while execution
             end = await self.advance_time(task.service_duration)
             self.set_local_virt_time(end)
 
@@ -73,10 +74,10 @@ class AsyncWorkerLP(BkSysCoLogicalProcess):
             self.state.is_busy = False
             self.state.processed += 1
             self.state.busy_time += end - start
-
+            #resolve task
             if task.future and not task.future.done():
                 task.future.set_result(task)
-
+            #notify dispatcher(worker is free)
             self.send_event(create_event(
                 timestamp=end,
                 sender_id=self.lp_id,
@@ -103,6 +104,7 @@ class AsyncDispatcherLP(BkSysCoLogicalProcess):
         self.capacity = capacity
 
     def _assign(self, task: Task, worker_id: int, now: float):
+        #non blocking task dispath to idle worker
         self.busy_workers.add(worker_id)
         self.state.dispatched += 1
         self.send_event(create_event(
@@ -114,12 +116,14 @@ class AsyncDispatcherLP(BkSysCoLogicalProcess):
         ))
 
     def _flush_queue(self, now: float):
+        #FIFO while idle are available
         while self.queue and self.idle_workers:
             self._assign(self.queue.popleft(), self.idle_workers.popleft(), now)
 
     async def coroutine_run(self):
         while True:
             try:
+                #await arrivals, worker completion callback
                 ev = await self.wait_for_multiple([
                     EventType.TASK_ARRIVAL.value,
                     EventType.WORKER_DONE.value,
@@ -134,14 +138,14 @@ class AsyncDispatcherLP(BkSysCoLogicalProcess):
                 self.state.arrived += 1
                 if task.future is None and self._event_loop:
                     task.future = self._create_future()
-
+                #reject and cancel future
                 in_system = len(self.queue) + len(self.busy_workers)
                 if self.capacity is not None and in_system >= self.capacity:
                     self.state.rejected += 1
                     if task.future and not task.future.done():
                         task.future.cancel()
                     continue
-
+                #dispatch if worker is idle, othewise enqueue
                 if not self.queue and self.idle_workers:
                     self._assign(task, self.idle_workers.popleft(), now)
                 else:
@@ -149,6 +153,7 @@ class AsyncDispatcherLP(BkSysCoLogicalProcess):
                     self._flush_queue(now)
 
             elif ev.event_type == EventType.WORKER_DONE.value:
+                #reclaim free worker and dispatch next queue
                 w_id = ev.payload["worker_id"]
                 self.busy_workers.discard(w_id)
                 self.idle_workers.append(w_id)
