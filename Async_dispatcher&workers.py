@@ -56,6 +56,7 @@ class AsyncWorkerLP(BkSysCoLogicalProcess):
         while True:
             try:
                 ev = await self.wait_for_multiple([EventType.ASSIGN_TASK.value])
+                self._pending_events = [e for e in self._pending_events if e is not ev]
             except (TIMEOUT_ERROR, CANCELLED_ERROR):
                 break
 
@@ -123,6 +124,7 @@ class AsyncDispatcherLP(BkSysCoLogicalProcess):
                     EventType.TASK_ARRIVAL.value,
                     EventType.WORKER_DONE.value,
                 ])
+                self._pending_events = [e for e in self._pending_events if e is not ev]
             except (TIMEOUT_ERROR, CANCELLED_ERROR):
                 break
 
